@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.5.0/css/flag-icon.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <title>Dashboard Financeira</title>
+</head>
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 0;
+        background-color: #f9f9f9;
+    }
+    header {
+        background-color: #4CAF50;
+        color: white;
+        text-align: center;
+        padding: 1em 0;
+    }
+    main {
+        margin: 20px;
+    }
+    #dashboard, #add-transaction {
+        margin-bottom: 20px;
+    }
+    #balance {
+        font-size: 1.5em;
+        color: #333;
+    }
+    #currency-selector {
+        margin-top: 10px;
+    }
+    #currency {
+        padding: 5px;
+        margin-left: 10px;
+    }
+    #selected-flag {
+        margin-left: 10px;
+        font-size: 2em;
+    }
+    #transactions ul {
+        list-style-type: none;
+        padding: 0;
+    }
+    #chart-section {
+        margin-top: 20px;
+    }
+    canvas {
+        max-width: 100%;
+        height: auto;
+    }
+    #pointer {
+        cursor: pointer;
+    }
+</style>
+<body id="pointer">
+    <header>
+        <h1>Controle Financeiro</h1>
+    </header>
+    <main>
+        <section id="dashboard">
+            <div id="balance">
+                <h2>Balanço</h2>
+                <p id="total-balance">$0.00</p>
+                <span id="selected-flag" class="flag-icon flag-icon-us"></span>
+            </div>
+            <div id="transactions">
+                <h2>Transações</h2>
+                <ul id="transaction-list"></ul>
+            </div>
+        </section>
+
+        <section id="add-transaction">
+            <h2>Adicionar Transação</h2>
+            <div id="currency-selector">
+                <label for="currency">Escolha a moeda:</label>
+                <select id="currency">
+                    <option value="us" class="flag-icon flag-icon-us">USD</option>
+                    <option value="br" class="flag-icon flag-icon-br">BRL</option>
+                    <option value="eu" class="flag-icon flag-icon-eu">EUR</option>
+                    <option value="jp" class="flag-icon flag-icon-jp">JPY</option>
+                    <option value="gb" class="flag-icon flag-icon-gb">GBP</option>
+                </select>
+            </div>
+            <br>
+            <form id="transaction-form">
+                <input type="text" id="description" placeholder="Descrição" required>
+                <input type="number" id="amount" placeholder="Valor" required>
+                <button type="submit">Adicionar</button>
+            </form>
+        </section>
+
+        <section id="chart-section" style="display: none;">
+            <h2>Variação da Moeda</h2>
+            <canvas id="currency-chart" width="400" height="200"></canvas>
+        </section>
+        <footer style="text-align: center;">
+            <p>&copy; 2017 - 2025 Lorrans Facca. Desenvolvido com HTML, CSS, JS e Bootstrap.</p>
+        </footer>
+    </main>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            const transactions = [];
+            const balanceElement = document.getElementById("total-balance");
+            const transactionList = document.getElementById("transaction-list");
+            const transactionForm = document.getElementById("transaction-form");
+            const currencySelect = document.getElementById("currency");
+            const selectedFlag = document.getElementById("selected-flag");
+            const chartSection = document.getElementById("chart-section");
+
+            const ctx = document.getElementById("currency-chart").getContext("2d");
+            let chart;
+
+            const exchangeRates = {
+                'us': { 'br': 5.75, 'eu': 0.93, 'jp': 134.25, 'gb': 0.82 },
+                'br': { 'us': 1 / 5.75, 'eu': 0.16, 'jp': 23.36, 'gb': 0.14 },
+                'eu': { 'us': 1 / 0.93, 'br': 5.75 / 0.93, 'jp': 143.77, 'gb': 0.88 },
+                'jp': { 'us': 1 / 134.25, 'br': 1 / 23.36, 'eu': 1 / 143.77, 'gb': 0.006 },
+                'gb': { 'us': 1 / 0.82, 'br': 5.75 / 0.82, 'eu': 1 / 0.88, 'jp': 167.78 }
+            };
+
+            function updateBalance() {
+                const total = transactions.reduce((sum, t) => sum + t.amount, 0);
+                balanceElement.textContent = `$${total.toFixed(2)}`;
+            }
+
+            function renderTransactions() {
+                transactionList.innerHTML = "";
+                transactions.forEach((t, index) => {
+                    const li = document.createElement("li");
+                    li.textContent = `${t.description}: $${t.amount.toFixed(2)}`;
+                    li.addEventListener("dblclick", () => removeTransaction(index));
+                    transactionList.appendChild(li);
+                });
+            }
+
+            function addTransaction(description, amount) {
+                transactions.push({ description, amount });
+                updateBalance();
+                renderTransactions();
+
+                chartSection.style.display = "block";
+
+                const selectedCurrency = currencySelect.value;
+                const exchangeRate = exchangeRates[selectedCurrency];
+
+                const convertedValues = {
+                    'BRL': amount * exchangeRate['br'],
+                    'EUR': amount * exchangeRate['eu'],
+                    'JPY': amount * exchangeRate['jp'],
+                    'GBP': amount * exchangeRate['gb']
+                };
+
+                const data = {
+                    labels: ["BRL", "EUR", "JPY", "GBP"],
+                    datasets: [{
+                        label: "Valor convertidos",
+                        data: [convertedValues['BRL'], convertedValues['EUR'], convertedValues['JPY'], convertedValues['GBP']],
+                        borderColor: "rgba(75, 192, 192, 1)",
+                        backgroundColor: "rgba(75, 192, 192, 0.2)",
+                        fill: true,
+                    }]
+                };
+
+                if (chart) {
+                    chart.destroy();
+                }
+
+                chart = new Chart(ctx, {
+                    type: "bar",
+                    data: data,
+                    options: {
+                        responsive: true,
+                        scales: {
+                            y: {
+                                beginAtZero: true
+                            }
+                        }
+                    }
+                });
+            }
+
+            function removeTransaction(index) {
+                transactions.splice(index, 1);
+                updateBalance();
+                renderTransactions();
+            }
+
+            currencySelect.addEventListener("change", () => {
+                const selectedValue = currencySelect.value;
+                selectedFlag.className = `flag-icon flag-icon-${selectedValue}`;
+            });
+
+            transactionForm.addEventListener("submit", (event) => {
+                event.preventDefault();
+                const description = document.getElementById("description").value;
+                const amount = parseFloat(document.getElementById("amount").value);
+                addTransaction(description, amount);
+                transactionForm.reset();
+            });
+
+            updateBalance();
+        });
+    </script>
+    <script src="node.js"></script>
+</body>
+</html>
